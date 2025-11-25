@@ -1,15 +1,3 @@
-// Préparation des variables
-If(VarRegion = "Consultant",
-    If(Or(IsBlank(LookUp(Consultant, ID = CB_Personne.Selected.ID).'Date de fin du contrat'),LookUp(Consultant, ID = CB_Personne.Selected.ID).'Date de fin du contrat' < Now()), 
-    Notify("La date de fin de contrat est depassé",NotificationType.Error))
-    
-    );
-If(VarRegion = "Consultant",
-    If(Coalesce(LookUp(Consultant, ID = CB_Personne.Selected.ID).'Nombre d’heures restantes',0) <=0 , 
-    Notify("Il n'y a plus d'heure dans le contrat",NotificationType.Error))
-    
-    );
-
 Set(
     varEtablissement,
     LookUp(Etablissements, ID = Value(D_Etablissement.Selected.ID))
@@ -35,9 +23,16 @@ Set(
     )
 );
 
-// Contrôles et traitement
+// NEW : Consultant record lookup
+Set(
+    varConsultantRecord,
+    LookUp(Consultant, ID = CB_Personne.Selected.ID)
+);
+
+// ────────────── CONTROLS & VALIDATIONS ──────────────
 Switch(
     true,
+
     IsBlank(MotifPriseEnCharge.Text),
         Notify("Merci de saisir un motif de prise en charge", NotificationType.Error),
 
@@ -50,7 +45,27 @@ Switch(
     (IsBlank(varEtablissement.ID) && IsBlank(CB_Personne.Selected.CENTRE)),
         Notify("Merci de sélectionner un établissement", NotificationType.Error),
 
-    // Sinon, on exécute le Patch
+    // NEW CONTROL 1 : Fin de contrat dépassée
+    VarRegion = "Consultant" &&
+    (
+        IsBlank(varConsultantRecord.'Date de fin du contrat') ||
+        varConsultantRecord.'Date de fin du contrat' < Today()
+    ),
+        Notify("La date de fin de contrat est dépassée", NotificationType.Error),
+
+    // NEW CONTROL 2 : Plus d’heures dans le contrat
+    VarRegion = "Consultant" &&
+    Coalesce(varConsultantRecord.'Nombre d’heures restantes', 0) <= 0,
+        Notify("Il n'y a plus d'heures dans le contrat", NotificationType.Error),
+    
+    // NEW CONTROL 3 : Heure demandé supérieur au restant
+    VarRegion = "Consultant" &&
+    Value(Honov2.Text) > Coalesce(varConsultantRecord.'Nombre d’heures restantes', 0),
+        Notify("Le nombre d'heure demandé est supérieur aux heures restantes du contrat", NotificationType.Error),
+    
+    // ───────────────────────────────
+    // PATCH IF ALL CHECKS PASSED
+    // ───────────────────────────────
     Patch(
         'Demandes d''engagements',
         Defaults('Demandes d''engagements'),
@@ -118,4 +133,4 @@ Switch(
     Refresh('Demandes d''engagements');
     'DEDV2-Validation'.Run(Last('Demandes d''engagements').ID);
     Refresh('Demandes d''engagements')
-)
+);
