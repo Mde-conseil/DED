@@ -1,0 +1,121 @@
+// Préparation des variables
+If(VarRegion = "Consultant",
+    If(Or(IsBlank(LookUp(Consultant, ID = CB_Personne.Selected.ID).'Date de fin du contrat'),LookUp(Consultant, ID = CB_Personne.Selected.ID).'Date de fin du contrat' < Now()), 
+    Notify("La date de fin de contrat est depassé",NotificationType.Error))
+    
+    );
+If(VarRegion = "Consultant",
+    If(Coalesce(LookUp(Consultant, ID = CB_Personne.Selected.ID).'Nombre d’heures restantes',0) <=0 , 
+    Notify("Il n'y a plus d'heure dans le contrat",NotificationType.Error))
+    
+    );
+
+Set(
+    varEtablissement,
+    LookUp(Etablissements, ID = Value(D_Etablissement.Selected.ID))
+);
+
+Set(
+    varMontantTotal,
+    Sum(
+        Value(Montant_Congres.Text),
+        Value(Montant_Nuit.Text),
+        Value(Montant_Dej.Text),
+        Value(Montant_Diner.Text),
+        Value(Montant_Pause.Text)
+    )
+);
+
+Set(
+    varCoordinatrices,
+    Concat(
+        LookUp('Planning et Budget', ID = CB_Evenement.Selected.ID).'Coordinatrices d''évènements',
+        Email,
+        ";"
+    )
+);
+
+// Contrôles et traitement
+Switch(
+    true,
+    IsBlank(MotifPriseEnCharge.Text),
+        Notify("Merci de saisir un motif de prise en charge", NotificationType.Error),
+
+    IsBlank(CB_Personne.Selected.E_x002d_MAIL),
+        Notify("Merci de saisir l'email du PRS", NotificationType.Error),
+
+    IsBlank(CB_Evenement.Selected.ID),
+        Notify("Merci de sélectionner un événement", NotificationType.Error),
+
+    (IsBlank(varEtablissement.ID) && IsBlank(CB_Personne.Selected.CENTRE)),
+        Notify("Merci de sélectionner un établissement", NotificationType.Error),
+
+    // Sinon, on exécute le Patch
+    Patch(
+        'Demandes d''engagements',
+        Defaults('Demandes d''engagements'),
+        Form3.Updates,
+        {
+            'Fonction / Nom / Prénom / Ville': CB_Personne.Selected.SPEC & "/" & CB_Personne.Selected.NOM & "/" & CB_Personne.Selected.PRENOM & "/" & CB_Personne.Selected.VILLE,
+            RPPS: CB_Personne.Selected.RPPS,
+            ETABLISSEMENT: CB_Personne.Selected.CENTRE,
+            Adresse: CB_Personne.Selected.ADRESSE,
+            'CP / Ville': CB_Personne.Selected.CP & "/" & CB_Personne.Selected.VILLE,
+            Email: CB_Personne.Selected.E_x002d_MAIL,
+            Téléphone: CB_Personne.Selected.TELEPHONE,
+            Portable: CB_Personne.Selected.PORTABLE,
+            'Arrivé le': DateArrivele.SelectedDate,
+            'Retour le ': DateRetourle.SelectedDate,
+            'Motif de prise en charge': MotifPriseEnCharge.Text,
+            Transport: Toggle1.Value,
+            Transport_Type: R_Transport.Selected.Value,
+            Transport2: Toggle1_16.Value,
+            Transport2_Type: R_Transport2.Selected.Value,
+            Transfert: Toggle1_12.Value,
+            Transfert_Type: R_Transfert.Selected.Value,
+            Congres: Toggle1_1.Value,
+            Congres_Montant: Montant_Congres.Text,
+            Hebergement: Toggle1_2.Value,
+            Hebergement_NB: TI_NbNuits.Text,
+            Hebergement_Montant: Montant_Nuit.Text,
+            Pause: Toggle1_13.Value,
+            Pause_NB: TI_Pause.Text,
+            Pause_Montant: Montant_Pause.Text,
+            DED_Etablissement: {
+                '@odata.type': "#Microsoft.Azure.Connectors.SharePoint.SPListExpandedReference",
+                Id: varEtablissement.ID,
+                Value: varEtablissement.ID
+            },
+            Dejeuner: Toggle1_3.Value,
+            Dejeuner_NB: TI_NbDej.Text,
+            Dejeuner_Montant: Montant_Dej.Text,
+            Diner: Toggle1_4.Value,
+            Diner_NB: TI_NbDiner.Text,
+            Diner_Montant: Montant_Diner.Text,
+            'Collaborateur / Journée Opératoire': CollaborateurTI.Text,
+            Commentaires: CommentaireTI.Text,
+            Montant_Total: varMontantTotal,
+            Rapport: HtmlText1.HtmlText,
+            'Nombre d''heures prévues (Consultant)': Value(Honov2.Text),
+            'Type de DED': "DED Pro",
+            'COORDINATRICE PRISE EN CHARGE': varCoordinatrices,
+            'ID Commercial': VarIDValidateur,
+            'Pro de santé - ID': CB_Personne.Selected.ID,
+            'Pro de santé - Region': VarRegion,
+            EVENEMENT: {
+                '@odata.type': "#Microsoft.Azure.Connectors.SharePoint.SPListExpandedReference",
+                Id: CB_Evenement.Selected.ID,
+                Value: CB_Evenement.Selected.Title
+            },
+            Statut: {
+                '@odata.type': "#Microsoft.Azure.Connectors.SharePoint.SPListExpandedReference",
+                Id: 1,
+                Value: "Soumis"
+            }
+        }
+    );
+    Set(VarVisibleFinPro, true);
+    Refresh('Demandes d''engagements');
+    'DEDV2-Validation'.Run(Last('Demandes d''engagements').ID);
+    Refresh('Demandes d''engagements')
+)
